@@ -89,11 +89,21 @@ func RegisterDomainTools(s *server.MCPServer, projectPath string) {
 		mcp.WithString("name", mcp.Required(), mcp.Description("Feature name")),
 		mcp.WithString("why", mcp.Required(), mcp.Description("Why this feature is needed")),
 		mcp.WithString("state", mcp.Required(), mcp.Description("vision, specced, building, ready, or broken")),
+		mcp.WithArray("acceptance", mcp.Description("Initial list of acceptance criteria (strings)")),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		domainName := mcp.ParseString(request, "domain", "")
 		featName := mcp.ParseString(request, "name", "")
 		why := mcp.ParseString(request, "why", "")
 		state := mcp.ParseString(request, "state", "")
+		
+		var acceptanceItems []product.AcceptanceItem
+		if acc, ok := mcp.ParseArgument(request, "acceptance", nil).([]any); ok {
+			for _, item := range acc {
+				if str, ok := item.(string); ok {
+					acceptanceItems = append(acceptanceItems, product.AcceptanceItem{Text: str, Done: false})
+				}
+			}
+		}
 
 		p, err := getProject(projectPath)
 		if err != nil {
@@ -116,7 +126,11 @@ func RegisterDomainTools(s *server.MCPServer, projectPath string) {
 			Name:       featName,
 			State:      state,
 			Why:        why,
-			Acceptance: []string{"[ ] When X, then Y"}, // Default placeholder
+			Acceptance: acceptanceItems,
+		}
+		
+		if len(newFeat.Acceptance) == 0 {
+			newFeat.Acceptance = []product.AcceptanceItem{{Text: "When X, then Y", Done: false}}
 		}
 		
 		d.Features = append(d.Features, newFeat)
@@ -126,6 +140,84 @@ func RegisterDomainTools(s *server.MCPServer, projectPath string) {
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Feature '%s' added to domain '%s'", featName, domainName)), nil
+	})
+
+	// set_feature_acceptance
+	s.AddTool(mcp.NewTool("set_feature_acceptance",
+		mcp.WithDescription("Overwrite all acceptance criteria for a feature"),
+		mcp.WithString("domain", mcp.Required(), mcp.Description("Domain name")),
+		mcp.WithString("feature", mcp.Required(), mcp.Description("Feature name")),
+		mcp.WithArray("acceptance", mcp.Required(), mcp.Description("New list of criteria (strings)")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		domainName := mcp.ParseString(request, "domain", "")
+		featName := mcp.ParseString(request, "feature", "")
+		
+		p, err := getProject(projectPath)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to load project: %v", err)), nil
+		}
+
+		f := p.Feature(domainName, featName)
+		if f == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Feature '%s' in domain '%s' not found", featName, domainName)), nil
+		}
+
+		var newItems []product.AcceptanceItem
+		if acc, ok := mcp.ParseArgument(request, "acceptance", nil).([]any); ok {
+			for _, item := range acc {
+				if str, ok := item.(string); ok {
+					newItems = append(newItems, product.AcceptanceItem{Text: str, Done: false})
+				}
+			}
+		}
+		f.Acceptance = newItems
+
+		if err := SmartSave(p, p.Dir); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to save project: %v", err)), nil
+		}
+		return mcp.NewToolResultText("Acceptance criteria updated"), nil
+	})
+
+	// toggle_feature_acceptance
+	s.AddTool(mcp.NewTool("toggle_feature_acceptance",
+		mcp.WithDescription("Mark a specific acceptance criterion as done or pending"),
+		mcp.WithString("domain", mcp.Required(), mcp.Description("Domain name")),
+		mcp.WithString("feature", mcp.Required(), mcp.Description("Feature name")),
+		mcp.WithString("text", mcp.Required(), mcp.Description("The exact text of the criterion")),
+		mcp.WithBoolean("done", mcp.Required(), mcp.Description("True if done, false if pending")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		domainName := mcp.ParseString(request, "domain", "")
+		featName := mcp.ParseString(request, "feature", "")
+		text := mcp.ParseString(request, "text", "")
+		done := mcp.ParseBoolean(request, "done", false)
+
+		p, err := getProject(projectPath)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to load project: %v", err)), nil
+		}
+
+		f := p.Feature(domainName, featName)
+		if f == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Feature '%s' in domain '%s' not found", featName, domainName)), nil
+		}
+
+		found := false
+		for i := range f.Acceptance {
+			if strings.EqualFold(f.Acceptance[i].Text, text) {
+				f.Acceptance[i].Done = done
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("Criterion '%s' not found in feature '%s'", text, featName)), nil
+		}
+
+		if err := SmartSave(p, p.Dir); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to save project: %v", err)), nil
+		}
+		return mcp.NewToolResultText("Criterion toggled"), nil
 	})
 
 	// update_feature_state

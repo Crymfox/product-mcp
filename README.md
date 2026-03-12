@@ -84,6 +84,8 @@ As an agent working on this project, you MUST adhere to the following workflow t
 - `add_domain`: Add a new domain (`as_file: true` recommended).
 - `add_feature`: Add a feature with state, why, and acceptance criteria.
 - `update_feature_state`: Transition a feature (vision -> building -> ready).
+- `set_feature_acceptance`: Overwrite the acceptance criteria list for a feature.
+- `toggle_feature_acceptance`: Mark a specific acceptance criterion as done or pending.
 
 ### Issues
 - `list_issues`: Filter and list issues from `ISSUES.md`.

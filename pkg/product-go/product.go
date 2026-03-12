@@ -60,12 +60,18 @@ type Domain struct {
 	Features []Feature
 }
 
+// AcceptanceItem is a single checkbox item in a feature's acceptance criteria.
+type AcceptanceItem struct {
+	Text string
+	Done bool
+}
+
 // Feature is a feature block inside a domain.
 type Feature struct {
 	Name       string
 	State      string
 	Why        string
-	Acceptance []string
+	Acceptance []AcceptanceItem
 	DependsOn  []string
 	Files      []string
 	Notes      string
@@ -285,12 +291,10 @@ func parseFeature(name, body string) Feature {
 //
 //	- **acceptance**:
 //	  - [ ] when X, then Y
-func parseAcceptanceFromBody(body string) []string {
+func parseAcceptanceFromBody(body string) []AcceptanceItem {
 	lines := strings.Split(body, "\n")
-	var items []string
+	var items []AcceptanceItem
 	inAcceptance := false
-	reAccItem := strings.NewReplacer()
-	_ = reAccItem
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "- **acceptance**:" {
 			inAcceptance = true
@@ -304,7 +308,11 @@ func parseAcceptanceFromBody(body string) []string {
 				rest := strings.TrimLeft(trimmed, " ")
 				// "- [ ] text" or "- [x] text"
 				if len(rest) >= 6 {
-					items = append(items, strings.TrimSpace(rest[6:]))
+					done := rest[3] == 'x' || rest[3] == 'X'
+					items = append(items, AcceptanceItem{
+						Text: strings.TrimSpace(rest[6:]),
+						Done: done,
+					})
 				}
 			} else if strings.HasPrefix(line, "- **") || (strings.HasPrefix(strings.TrimSpace(line), "-") && !strings.HasPrefix(strings.TrimSpace(line), "- [")) {
 				// New top-level field — stop acceptance parsing
@@ -449,7 +457,11 @@ func serializeFeature(f Feature, prefix string) string {
 	if len(f.Acceptance) > 0 {
 		sb.WriteString("- **acceptance**:\n")
 		for _, a := range f.Acceptance {
-			sb.WriteString(fmt.Sprintf("  - [ ] %s\n", a))
+			mark := " "
+			if a.Done {
+				mark = "x"
+			}
+			sb.WriteString(fmt.Sprintf("  - [%s] %s\n", mark, a.Text))
 		}
 	}
 	if len(f.DependsOn) > 0 {
