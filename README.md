@@ -34,6 +34,46 @@ cd /home/crymfox/repos/CrymfoxLabs/product-repos/product-mcp
 go build -o product-mcp
 ```
 
+## Usage & Integration
+
+Since `product-mcp` uses **Contextual Discovery**, you only need to configure it once globally. It will automatically find the `PRODUCT.md` in whichever project you have open.
+
+### 1. Cursor
+1.  Open **Cursor Settings** (`Ctrl + Shift + J` / `Cmd + Shift + J`).
+2.  Go to **Features** -> **MCP**.
+3.  Click **+ Add Server**.
+4.  **Name**: `Product-Manager`
+5.  **Type**: `command`
+6.  **Command**: 
+    ```bash
+    /home/crymfox/repos/CrymfoxLabs/product-repos/product-mcp/product-mcp
+    ```
+
+### 2. Claude Desktop
+Add this to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "product-mcp": {
+      "command": "/home/crymfox/repos/CrymfoxLabs/product-repos/product-mcp/product-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### 3. Gemini CLI
+Add the server to your configuration:
+```json
+{
+  "mcpServers": {
+    "product": {
+      "command": "/home/crymfox/repos/CrymfoxLabs/product-repos/product-mcp/product-mcp"
+    }
+  }
+}
+```
+
 ## Agent Configuration
 
 To get the best results, add the following instructions to your coding agent (e.g., `.cursorrules`, `.agent`, or system prompt).
@@ -54,7 +94,10 @@ As an agent working on this project, you MUST adhere to the following workflow t
 - **Implementation**:
     - If you add a library, run `manage_tech_stack`.
     - If you add a new sub-folder or module, run `manage_scopes`.
+    - **Acceptance Tracking**: As you satisfy individual requirements, use `toggle_feature_acceptance` to mark them as done.
+    - **Scope Creep/Change**: If requirements change, use `set_feature_acceptance` to update the criteria.
 - **Completion**:
+    - Ensure all acceptance criteria are marked as done.
     - Set issue to `status: closed` and provide a concise `fix` description.
     - Set features to `state: ready`.
     - If a Goal is fully satisfied, use `toggle_goal done:true`.
